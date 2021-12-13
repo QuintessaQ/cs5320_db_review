@@ -1,0 +1,8 @@
+A1
+
+select R.bid from Reservations R where exists (select R2.bid, count(*) from Reservations R2 where R2.bid = R.bid group by R2.bid having count(*) > avg(*))
+
+select R.bid from Reservations R where (select count(*) from Reservations R2 where R2.bid = R.bid) > select avg(count(*)) from Reservations R2 where R3.bid = R.bid group by R3.bid)
+
+A2
+Select S.sname from Sailors S where exists (select * from Reservation R where R.sid = S.sid where not exists (select * from Reservation R2 where R2.sid = S.sid and R2.sid <> R.sid and R2.bid = R.bid))

@@ -1,0 +1,29 @@
+A1
+Select R.sid, R.bid from Reserves R where not exists (select * from Reserves R2 where R.sid = R2.sid and R2.bid <> R.bid) and not exists (select * from Reserves R3 where R.bid = R3.bid and R3.sid <> R.sid)
+
+A2
+Select R.sid from Reserves R where exists (select * from Reserves R2 where R2.sid = R.sid and R2.bid = R.bid and R2.date > R.date and not exists (select * from Reserves R3 where R3.sid = R.sid and R3.bid <> R2.bid and R.date < R3.date and R3.date < R2.date) )
+
+A3
+Select B.color and AVG(*) from Boats B left outer join Reserves R on (R.bid = B.bid) groupby B.color
+
+
+Select B.color, avg(count) from Boats B, (Select B.bid as bid, count(R.sid) as count from Boats B left outer join Reserves R on (R.bid=B.bid) group by B.bid) as Temp where B.bid = Temp.bid group by B.color;??
+
+A4
+
+select T.sid, T.bid from (select R.sid, R.bid, count(*) from Reserves R group by R.sid, R.bid ordered by count(*) DESC limit 1) as T
+
+
+Select T.sid, T.bid from (Select Sid, bid, count(*) as count from Reserves R group by Sid, bid) as T where not exists (Select * from (Select Sid, bid, count(*) as count from Reserves R group by Sid, bid) as T2 where T2.count > T.count and T2.sid = T.sid);
+
+
+B1
+the total memory cost is # pages in a block of the outer table + 2 = 12, so the size of a block in R is 10 pages. The total join cost = x + ceil(x/10) * 2x = x + x^2/5 = 30. So x = 10. 
+
+B2
+R consumes 50,000 bytes, or 50 pages. Assume the cost for each index access is x. Total cost = 50 + 5000 * x <= 10,000 . x = 1
+
+B3
+read twice, write once. 4(m+n)
+

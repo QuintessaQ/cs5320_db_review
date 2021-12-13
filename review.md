@@ -11,7 +11,6 @@
         - Students: Sid, Sname, Gpa
         - Enrollment: Sid, Cid
         - Courses: Cid, Cname
-
     - integrity constraints
         - limit admissible content of tabel
         - added via ALTER TABLE command
@@ -19,7 +18,7 @@
     - primary key constraint
         - refers to a single table
         - identifies a subset of columns as key columns
-        - no two rows have the same value sin key columns
+        - no two rows have the same values in key columns
         - syntax
             - ALTER TABLE <table>
             - ADD CONSTRAINT Primary Key (<key-cols>)
@@ -169,7 +168,6 @@
     - Sometimes we want to keep rows regardless
     - Can do that with OUTER JOINs
         - Fills up fields in missing row with NULL values
-
     - Keep each row in left table (plus standard join result):
         - <table-1> LEFT OUTER JOIN <table-2> ON ... 
     - Keep each row in right table (plus standard result):
@@ -188,7 +186,8 @@
         - <query-1> UNION <query-2> : eliminates duplicates
         - <query-1> UNION ALL <query-2> : keep duplicates 
     - Intersect results from two queries
-        - <query-1> INTERSECT <query-2> Set difference between queries
+        - <query-1> INTERSECT <query-2> 
+    - Set difference between queries
         - <query-1> EXCEPT <query-2>
     - Results from <query-1> and <query-2> must be union-compatible
 - Query Nesting
@@ -301,7 +300,7 @@
     - tables into pages
     - pages into slots
     - slots into fields
-- Row Stores vs.  Column Stores
+- Row Stores vs. Column Stores
     - So far: have seen how to store data "row-wise"
         - I.e., data for same row is close together
         - This is done by traditional DBMS like Postgres 
@@ -330,7 +329,7 @@
         - R(i) leads to data entries with key K(i)
         - R(i) references a data page and a slot on that page
 - where to use tree indexes?
-    - use for queries with equality preidcates
+    - use for queries with equality predicates
         - E.g., ... WHERE Sname = 'Alan'
     - Can use index for queries with inequality predicates
         - E.g., ... WHERE gpa > 3
@@ -502,7 +501,8 @@
     - Want to get rid of one level of indirection?
         - Can store data directly instead of references
             - Leads to "clustered index", only one per table! 
-            - "Clustered index" in general: data sorted by index key
+            - "Clustered index" in general
+                - data sorted by index key
 - Choose Index Type in Postgres
     - CREATE INDEX <index-name> ON <table>  USING <method> (<column-list>)
     - Can choose btree or hash for method
@@ -533,7 +533,7 @@
         - Increase pin count and return page address
 - LRU replacement policy
     - Want to replace page required farthest in the future
-        - oing so reduces expensive cache misses 
+        - doing so reduces expensive cache misses 
     - However: difficult to predict that in general 
     - Heuristic: remove least recently used page (LRU)
         - Did not use page for long time, unlikely to do soon 
@@ -594,7 +594,7 @@
         - store current page from outer table
         - store current page from inner table
         - buffer page to store output (before disk write)
-- Block Nested Loop Join
+- Block Nested Loop Join (BNL)
     - read inner table for each outer block
     - More efficient as block contains multiple pages
     - PageBlocks(T, b): Blocks of b pages from T 
@@ -756,7 +756,7 @@
         - Two input tables with M and N pages, B buffer pages 
         - First phase has cost
             - 2*M*(1+Ceil(log_{B-1}(M/B))) for sorting table 1
-            - 2*N*(1+Ceil(logB-1(M/B))) for sorting table 2 
+            - 2*N*(1+Ceil(logB-1(N/B))) for sorting table 2 
         - Second phase has cost
             - M+N (we don't count cost for writing output!)
     - total memory
@@ -919,7 +919,7 @@
         - H2: Avoid predicate-less joins
             - Join result size: product of input cardinality * selectivity
             - Selectivity is one when joining tables without predicates 
-            - Often means very large join results, probably sub-optimal --
+            - Often means very large join results, probably sub-optimal 
             - (Heuristic may discard optimal order in special cases)
         - H3: Focus on left-deep plans
             - Allows pipelining: joins pass on result parts in-memory 
@@ -935,3 +935,439 @@
         - Sub-query: joins subsets of tables
     - Compose optimal plans from optimal sub-query plans
     - ![dynamic programming](imgs/dp.png)
+
+## transactions
+- BEGIN - transaction - COMMIT
+- ACID Guarantees
+    - A: Atomicity (either execute all or nothing)
+    - C: Consistency (enforce all integrity constraints)
+        - Primary key constraints
+        - Referential integrity (foreign key constraints)   
+        - More complex constraints can be defined
+    - I: Isolation (avoid interleaving transactions badly)
+        - Different users may execute transactions concurrently
+        - Executing transactions sequentially is inefficient
+        - DBMS may interleave steps from multiple transactions 
+        - Isolation means simulating sequential execution to users
+    - D: Durability (ensure that updates are not lost)
+        - This must hold even if DBMS or server crashes
+        - Must store enough info on disk to restore at startup 
+        - Only notify user of commit after that has happened
+
+## Isolation via concurrency control
+- Why Interleave Steps?
+    - long running transactions
+        - alternate between transaction steps
+        - Long transaction barely slower, short transaction quick
+    -  idle time e.g. by disk access
+- Isolation Anomalies
+    - Anomaly: may destroy illusion of sequential execution 
+    - Dirty reads: read data from unfinished transaction 
+    - Unrepeatable reads: data changes while working with it 
+    - Lost updates: unsaved changes are overridden
+- dirty reads
+    - read data written by uncommitted transaction
+    - Wx(A) Ry(A)
+- Unrepeatable Reads
+    - Reading committed data may be problematic, too
+    - We read data twice, changed from outside in between 
+    - Means we read different values without changing value
+        - E.g., check if at least one item stored (read 1), proceed 
+        - Other transaction reduces item count to zero
+        - Now try to reduce item count by one (read 2 & write)
+    - Rx(A) Wy(A) Cy Rx(A)
+- Lost Updates
+    - We override value written by ongoing transaction
+    - E.g., want to pay same salary for all employees
+    - Have two transactions updating salary to different values 
+    - Constraint holds if transactions execute sequentially
+    - But may not hold if interleaving transactions
+    - Anomaly signature in short notation: 
+        - Wx(A) Wy(A)
+- Phantom Problem
+    - Read is unrepeatable because rows were inserted
+    - E.g., we query twice for rows satisfying a predicate
+    - Another transaction inserts new rows in between 
+    - Problem is not related to an update but to insertion 
+    - Therefore difficult to represent with current notation 
+- ![SQL isolation levels](imgs/sql_isolation.png)
+- Final State Equivalence
+    - Compare two schedules based on final database state 
+    - Equivalent schedules if DB content equal after execution 
+    - Must hold for arbitrary initial database content
+    - E.g. 
+        - W1(A) W2(A) W1(B) W2(B) C1 C2 
+        - W1(A) W1(B) C1 W2(A) W2(B) C2
+    - A schedule S is final state serializable if
+        - There is a serial schedule ...
+        - that is final state equivalent to S.
+    - May have unrepeatable reads with final state serializability
+- View Equivalence
+    - Two schedules S1 and S2 are view equivalent iff
+        - If transaction X reads the initial value for some object in S1, it also does so in S2
+        - If transaction X reads a value written by transaction Y in S1, it also does so in S2
+        - If transaction X writes the final value written by transaction Y in S1, it also does so in S2
+    - E.g., consider schedule R1(A) W2(A) R1(A) C1 C2
+        - R1(A) R1(A) C1 W2(A) C2 
+            - not view equivalent as second read now returns initial value
+        - W2(A) C2 R1(A) R1(A) C1 
+            - not view equivalent as first read does not return initial value
+- Conflict Equivalence
+    - Two operations of different transactions on the same object conflict if at least one of them is a write
+        - No problem as long as transactions only read data
+        - Three possible conflict types: RW, WR, and WW
+    - Condition for schedules S1 and S2 being conflict-equivalent:
+        - Can get from S1 to S2 by swapping non-conflicting operations
+    - Can test efficiently if schedule is conflict serializable
+        - Draw conflict graph (see next) 
+        - Test if conflict graph has cycle 
+        - Conflict serializable if no cycle
+        - For each pair of conflicting operations O1 and O2
+        - Draw edge from O1 transaction to O2 transaction
+- ![Overview of Classes of Schedules](imgs/class_schedules.png)
+- Recoverable Schedules
+    - A schedule is recoverable if this condition holds:
+        - Transaction commits only after all transactions it read from have committed as well
+    - Example for non-recoverable schedule:
+        - W1(A) R2(A) W2(B) C2 A1
+        - No trace of aborted transactions should remain
+        - But write to B may have been influenced by read from A
+- ACA schedules (Avoiding Cascading Aborts)
+    - no transaction reads uncommitted data (only reads committed data)
+    - E.g., recoverable but does not avoid cascading aborts:
+        - W1(A) R2(A) W2(B) C1 C2
+- Strict Schedules
+    - No transaction reads or writes uncommitted data
+    - Otherwise cleanup after aborts can get tricky
+        - Need to keep track of different object versions
+        - Must check for each object whether undo required 
+    - E.g., W1(A) W2(A) W3(A) not strict (ACA & recoverable)
+- ![Classifying Schedules by Abort-Related Restrictions](imgs/abort_restrictions.png)
+
+
+## Two-Phase Locking
+- Release Locks Early
+    - may increase parallelism
+    - Release lock after last operation on associated object 
+    - But doing so may lead to cascading aborts, 
+    - e.g.: W1(A) [Lock on A from 1 → 2] R2(A) A1
+- Acquire Locks Late
+    - Acquire locks directly before read or write operation
+    - May improve performance by increasing parallelism 
+    - May however lead to deadlocks
+- two-phase locking
+    - Combines all of the aforementioned optimizations
+        - Fine-grained locks on single objects
+        - Distinguishes different lock types
+        - Locks may be acquired late (depends on 2PL variant) 
+        - Locks may be released early (depends on 2PL variant) 
+        - But restrictions on when locks are acquired/released
+    - Each transaction has two separate phases with 2PL 
+    - First phase: transaction may acquire locks but no release 
+    - Second phase: transaction may only release locks
+    - Guarantees conflict-serializable schedules
+- Two Phase Locking Variants
+    - Conservative 2PL
+        - acquire all locks at transaction start 
+        - revents deadlocks
+    - Strict 2PL
+        - release all locks at transaction end
+        - Strict 2PL prevents cascading aborts
+    - Can also combine the two (conservative strict 2PL) 
+    - Plain 2PL makes no restrictions on locking periods
+- ![Illustration of 2PL Variants](imgs/2PL_variants.png)
+- Release First Lemma
+    - if conflict graph has path from transaction T1 to transaction T2 
+    - then T1 releases some lock before T2 acquires some lock
+- 2PL vs. Conflict Serializable
+    - 2PL only produces conflict serializable schedules
+    - but 2PL cannot produce all conflict serializable schedules?
+    - e.g. W1(A) R2(A) C2 R3(B) C3 W1(B) C1
+    - 2PL \subseteq Conflict Serializable
+
+## More on Locking
+- Resolving Deadlocks
+    - abort one deadlocked transaction 
+    - Aborted transaction is typically restarted
+    - Can try to optimize selection of aborted transaction
+        - E.g., abort youngest transaction for least overhead
+- Avoiding Deadlocks
+    - Proactively abort transactions that may cause deadlocks 
+    - Priority based on timestamps (older transaction - higher priority) 
+    -  Wound-wait protocol
+        - Transaction T1 needs lock held by T2 
+        - T1 causes T2 abort if T1 has higher priority
+        - T1 waits for lock from T2 if T1 has lower priority 
+    - Wait-die protocol
+        - Transaction T1 needs lock held by T2 
+        - T1 waits for lock from T2 if T1 has higher priority 
+        - T1 aborts itself if it has lower priority than T2
+        - Advantage 
+            - Transactions that acquired all locks won't abort
+        - Disadvantage
+            - Young transaction may re-abort for same reason
+    - Avoiding Starvation
+        - Higher priority transaction is never restarted for both 
+        - When restarting transaction, assign original timestamp 
+        - So transaction will be eventually prioritized
+        - Avoids starvation (i.e., no transaction never processed)
+- Phantoms
+    - example
+        - Transaction 1 selects students with name starting with F 
+        - Transaction 2 inserts new student "Frank"
+        - Transaction 1 selects students starting with F again
+            - Suddenly we see a new student in the query result
+            - Similar to unrepeatable read, caused by insertions 
+        - Problem: 2PL only locked students present at first query
+    - Avoiding Phantoms
+        - Avoiding Phantoms
+            - Predicate locking: lock tuples satisfying certain predicate
+            - E.g., predicate "name starts with F" in the example 
+            - Locks current and future entries equally
+            - Complex to realize for arbitrary predicates
+        - Can use index when considering equality predicates
+            - Lock index page that would change at insertion 
+            - Cannot insert as long as index page is locked
+- Locking in Tree Indexes
+    - Locking for index lookups ("crabbing"):
+        - Identify next node (child node or root at start) 
+        - Lock next (read lock), then unlock parent 
+        - repeat
+- Multiple-Granularity Locks
+    - intention locks
+        - IS (Intention Shared): 
+            - want shared lock on contained object
+        - IX (Intention Exclusive): 
+            - want exclusive lock on contained object
+    - ![Lock Compatibility](imgs/lock_compatibility.png)
+    - Using Intention Locks
+        - Need IS lock on ancestors before requesting Shared lock 
+        - Need IX lock on ancestors before Exclusive lock
+        - Release intention locks from leaf to root node
+            - Otherwise may have inconsistent locks
+
+## Recovery After System Crashes
+- ![Summary of Options](imgs/force_steal.png)
+- Write-Ahead Logging
+    - Write all log entries of a transaction before commit
+        - guarantees durability
+        - Use log entries for redo in case of a crash
+    - Write all log entries of a buffer page before persisting
+        - guarantees atomicity
+        - Use log entries for undo in case of a crash
+- ARIES Algorithm Overview
+    - Analysis: determine transactions to undo/redo via log 
+    - Redo: get back to state directly before the crash 
+    - Undo: undo effects of aborted transactions
+- Types of Log Entries
+    - Update: states new and prior value after data update
+        - New value for redo, old value for undo 
+    - Commit: indicates that a transaction committed 
+    - Abort: indicates that a transaction aborted
+    - End: indicates cleanup for transaction finished 
+    - Compensation: indicates we undid prior operation
+        - Must keep track in case of crashes during recovery
+    - Generic Log Entry Fields
+        - Each log entry has an ID, the log sequence number (LSN) 
+        - TransID: this transaction generated the log entry 
+        - PrevLSN: LSN of previous entry for same transaction 
+        - Type: type of log entry (see previous slide)
+- Flushed LSN
+    - FlushedLSN: log entries persistent up to this entry 
+    - Can exploit to verify rules of write-ahead logging 
+    - Must persist transaction log entries before commit
+        - Must have flushedLSN ≥ transaction lastLSN 
+    - Must persist log entries about page before disk write
+        - Must have flushedLSN ≥ page's pageLSN
+- Transaction Table
+    - Contains one entry for each active transaction 
+    - Stores for each transaction three fields:
+        - TransID: transaction ID
+        - Status: running/committed/aborted
+        - LastLSN: ID of last log entry by that transaction
+- Dirty Page Table
+    - Dirty page    
+        - in-memory version differs from disk version
+        - This means changes would be lost by crash
+    - Dirty page table stores one entry per dirty page, storing
+        - PageID: ID of dirty page
+        - RecLSN: LSN of first log entry making page dirty
+- Page LastLSN
+    - The LSN of the last operation changing that page 
+    - Stored for each page in memory and each page on disk 
+    - LasLSN of disk and memory version of page may differ
+
+## Recovery 2
+- We can avoid a redo if one of those conditions holds
+    - Page affected by update is not in dirty page table
+    - Affected page in DP table but with recLSN > LSN
+    - PageLSN of page on hard disk with pageLSN >= LSN
+
+## Databse Design
+- Entities and Attributes
+    - Entity set
+        - multiple entities of same type
+        - Represented as rectangle in ER diagram 
+    - Attribute
+        - a property connected to an entity set
+        - Represented as oval in ER diagram 
+        - Connected via lines to associated entity 
+        - Underlined if (part of) a key attribute 
+        - Attributes have simple values (e.g., integer)
+- relationships
+    - relationship connects entities 
+    - Relationships are represented as diamonds 
+    - Connecting lines indicate targeted entities 
+    - May connect two or more entities
+- Classifying Relationships
+    - Can constrain number of relationships per entity 
+    - Participation constraint
+        - entity must relate at least once
+        - Represented by a thick line (entity to relationship) 
+    - At-most-one constraint
+        - entity relates at most once
+        - Represented by arrow (from entity to relationship)
+- More Relationship Features
+    - Can associate relationships with attributes
+        - Same representation as for entity attributes
+        - Refers to related entity combinations 
+    - Can assign entities to roles
+        - Represent role as label for connecting edge 
+        - Required when connecting entities of same type
+        - e.g. supervisor and supervised
+- Sub-Classes
+    - Sub-classing allows to reduce redundancy in diagram
+        - inherit the attributes from parent
+        - inherit relationships from parent 
+    - Represent sub-classes via triangles ("Is-A")
+        - No multiple inheritance (sub-classes form tree)
+- Weak Entities
+    - can only be uniquely identified by considering the primary key of another ("owner") entity
+    - connects to owner via identifying relationship 
+    - must participate in identifying relationship 
+    - Also, each weak entity can appear at most once in it
+    - e.g. HW_Nr for Homework entity and Course_ID for Course entity
+- Aggregation
+    - Models relationship of a relationship
+    - Surround relationship with dashed rectangle 
+    - Now connect dashed rectangle with other items
+- Design Choices: Entities vs. Attributes
+    - Use entity if employees can have multiple addresses
+        - Attribute values cannot be set valued
+    - Model as entity if we want to structure address further
+        - Can model components as attributes
+- ER diagrams as Relations
+    - Need to translate ER diagrams to relations 
+    - Introduce relations for entity types
+        - Each entity becomes row in relation 
+        - Properties are represented as columns 
+        - Underlined attributes part of primary key
+- Translating Relationships
+    - Generic method: introduce relation capturing relationships
+        - Columns store primary keys of all connected entities 
+        - Row represents relationship between specific entities 
+        - Primary key combines primary keys of entities 
+        - Additional attributes become columns as well
+    - ![Example](imgs/ex1.png)
+
+- Translating Sub-Classes
+    - Entities of sub-class may have additional attributes 
+    - Can be represented in multiple different ways
+        - Separate relations for superclass and sub-class 
+        - Introduce multiple relations linking key to attributes 
+        - Use relation for sub-class, set unused attributes to null
+    - ![Sub-classing Example](imgs/subclass_ex.png)
+- Translating Weak Entities
+    - Introduce new relation for storing weak entities
+    - Add foreign key columns referencing owner entity
+    - ![Weak Entities Example](imgs/weak_entity.png)
+
+## Database Normalization
+- Functional Dependency (FD)
+    - Used to detect data redundancies (want to remove) 
+    - Values in some columns uniquely decide values in others 
+    - Notation: X → Y means values in X decide values in Y
+- Inferring FDs
+    - Notation F1 |= F2 means FDs F1 imply FDs F2
+        - No relation can satisfy F1 without satisfying F2 
+    - Can infer all FDs by applying Armstrong's Axioms:
+        - Reflexivity: if Y ⊆ X then X → Y is implied 
+        - Augmentation: if X → Y then XZ → YZ for any Z
+        - Transitivity: if X → Y and Y → Z then X → Z
+- FD Closure
+    - Closure of a set of FDs are all implied FDs
+    - F+ = {f|F |= f}
+    - Can be calculated using Armstrong's axioms 
+    - F is a cover for G if F+ = G+
+    - The closure can be extremely large
+- Attribute Closure
+    - Entire closure is typically too large to be useful 
+    - Attribute closure gets all FDs for fixed left attributes
+    - X+ for attributes X is attribute closure
+    - Useful for checking if one specific FD is implied
+- Example: Attribute Closures
+    - F = {A → D, AB → E, BI → E, CD → I, E → C}
+    - Want to find attribute closure (AE)+ 
+    - Before Iteration 1: closure is (AE) 
+    - Before Iteration 2: closure is (ACDE) 
+    - Before Iteration 3: closure is (ACDEI) 
+    - (No change in Iteration 3)
+- Boyce-Codd Normal Form (BCNF)
+    - A schema if in BCNF if the following conditions holds
+    - For all FDs A → b whose attributes are in same table
+        - Either b is element in A ("trivial" FD)
+        - Or A contains a key of its associated table 
+    - This must apply to given and inferred FDs!
+    - Does not permit any redundancy!
+- Third Normal Form (3NF)
+    - A schema if in 3NF if the following conditions holds
+    - For all FDs A → b whose attributes are in same table
+        - Either b is element in A ("trivial" FD)
+        - Or A contains a key of its associated table 
+        - Or b is part of some minimal key
+    - This must apply to given and inferred FDs!
+- Comparison of Normal Forms
+    - BCNF disallows any redundancy
+        - Pro: avoids all negative effects of redundancy
+        - Con: may require breaking up dependencies 
+    - 3NF allows redundancy in some cases
+        - Pro: can always preserve dependencies 
+        - Con: may still have some negative effects
+- Decomposition
+    - Normal forms impose conditions on FDs in single table 
+    - Decompose tables into smaller tables to satisfy them 
+    - Decomposition must allow to reconstruct original data
+        - Assume we decomposed R into X and Y 
+        - We can do so if X⋂Y→X **or** X⋂Y→Y is an FD
+            - Can then match each row from Y to one row from X/
+            - Can then match each row from X to one row from Y
+    - ![loseless/lossy de/recompositions](imgs/loseless_lossy.png)
+- Towards BCNF
+    - Repeat while some FD A→b on R violates BCNF rules
+        - Decompose R into R-b and Ab
+    - All decompositions are lossless as (R-b)⋂Ab=A→b
+    - Will terminate as tables get smaller and smaller 
+    - End result may depend on decomposition order
+- (One) BCNF solution
+    - CSJDPQV, key C, JP→C, SD→P, J→S
+    - For SD→P, decompose into SDP, CSJDQV
+    - For J→S, decomposes CSJDQV into JS, CJDQV 
+    - Final database schema: SDP, JS, CJDQV
+- Dependency Preservation
+    - Assume we decompose R into X and Y 
+    - Assume we enforce FDs on X and Y separately
+        - I.e., we enforce all FDs that only use attributes on X
+        - Then we enforce all FDs that only use attributes on Y 
+    - This enforces all FDs on R if dependency preserving
+- Decomposition Properties
+    - Reminder: lossless vs. dependency preserving 
+    - None of the two properties implies the other! 
+    - BCNF may lose dependency preservation
+    - 3NF fixes that
+- Towards 3NF
+    - Same procedure as for BCNF with one extension
+    - If dependency A→b broken then add relation Ab 
+    - Want to use minimal cover FDs for this!
+        - Right hand side of each FD is a single attribute 
+        - Closure changes when deleting any FD 
+        - Closure changes when deleting any attribute
